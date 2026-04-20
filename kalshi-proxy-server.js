@@ -1,23 +1,62 @@
-const https=require("https"),http=require("http");
-const PORT=process.env.PORT||3001;
-const CORS={"Access-Control-Allow-Origin":"*","Access-Control-Allow-Methods":"GET,POST,PUT,DELETE,OPTIONS","Access-Control-Allow-Headers":"Content-Type,KALSHI-ACCESS-KEY,KALSHI-ACCESS-TIMESTAMP,KALSHI-ACCESS-SIGNATURE"};
-http.createServer((req,res)=>{
-  Object.entries(CORS).forEach(([k,v])=>res.setHeader(k,v));
-  if(req.method==="OPTIONS"){res.writeHead(200);res.end();return;}
-  const path=req.url.replace(/^\/kalshi/,"");
-  const chunks=[];
-  req.on("data",c=>chunks.push(c));
-  req.on("end",()=>{
-    const body=chunks.length?Buffer.concat(chunks):null;
-    const fwd={...req.headers,host:"demo-api.kalshi.co"};
-    delete fwd["content-length"];
-    if(body)fwd["content-length"]=Buffer.byteLength(body);
-    const pr=https.request({hostname:"demo-api.kalshi.co",port:443,path:"/trade-api/v2"+path,method:req.method,headers:fwd},up=>{
-      res.writeHead(up.statusCode,{...up.headers,...CORS});
-      up.pipe(res);
-    });
-    pr.on("error",e=>{res.writeHead(502);res.end(e.message);});
-    if(body)pr.write(body);
-    pr.end();
-  });
-}).listen(PORT,()=>console.log("Kalshi proxy on port "+PORT));
+const https = require(“https”);
+const http  = require(“http”);
+const PORT  = process.env.PORT || 3001;
+
+const CORS = {
+“Access-Control-Allow-Origin”:  “*”,
+“Access-Control-Allow-Methods”: “GET,POST,PUT,DELETE,PATCH,OPTIONS”,
+“Access-Control-Allow-Headers”: “Content-Type,Authorization,KALSHI-ACCESS-KEY,KALSHI-ACCESS-TIMESTAMP,KALSHI-ACCESS-SIGNATURE”,
+“Access-Control-Max-Age”: “86400”,
+};
+
+http.createServer((req, res) => {
+// Set CORS on EVERY response including errors
+Object.entries(CORS).forEach(([k, v]) => res.setHeader(k, v));
+
+// Preflight
+if (req.method === “OPTIONS”) {
+res.writeHead(204);
+res.end();
+return;
+}
+
+// Strip optional /kalshi prefix
+const kalshiPath = “/trade-api/v2” + req.url.replace(/^/kalshi/, “”);
+
+const chunks = [];
+req.on(“data”, c => chunks.push(c));
+req.on(“end”, () => {
+const body = chunks.length ? Buffer.concat(chunks) : null;
+
+```
+const fwdHeaders = {};
+for (const [k, v] of Object.entries(req.headers)) {
+  if (k.toLowerCase() !== "host") fwdHeaders[k] = v;
+}
+fwdHeaders["host"] = "demo-api.kalshi.co";
+if (body) fwdHeaders["content-length"] = Buffer.byteLength(body);
+
+const proxy = https.request(
+  { hostname:"demo-api.kalshi.co", port:443, path:kalshiPath, method:req.method, headers:fwdHeaders },
+  upstream => {
+    const out = { ...upstream.headers, ...CORS };
+    delete out["content-encoding"];
+    res.writeHead(upstream.statusCode, out);
+    upstream.pipe(res);
+  }
+);
+
+proxy.on("error", err => {
+  res.writeHead(502, { "Content-Type":"application/json", ...CORS });
+  res.end(JSON.stringify({ error:"Proxy error", detail:err.message }));
+});
+
+if (body) proxy.write(body);
+proxy.end();
+```
+
+});
+
+}).listen(PORT, () => {
+console.log(“Kalshi proxy running on port “ + PORT);
+});
