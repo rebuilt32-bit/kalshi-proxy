@@ -1,12 +1,1 @@
-{
-  "name": "kalshi-proxy",
-  "version": "1.0.0",
-  "description": "CORS proxy for Kalshi demo API — deploy to Railway or Render",
-  "main": "kalshi-proxy-server.js",
-  "scripts": {
-    "start": "node kalshi-proxy-server.js"
-  },
-  "engines": {
-    "node": ">=18"
-  }
-}
+{"scripts":{"start":"node kalshi-proxy-server.js"}}
