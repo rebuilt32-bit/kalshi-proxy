@@ -1,1 +1,1 @@
-{"scripts":{"start":"node kalshi-proxy-server.js"}}
+{"start": "node kalshi-proxy-server.js"}
